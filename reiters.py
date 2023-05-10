@@ -4,8 +4,8 @@ import numpy as np
 from enum import Enum
 
 alpha = 1
-gamma = 0.035
-beta = 0.8
+gamma = 0.001
+beta = 0.4
 
 class State(Enum):
     frozen = 1
@@ -13,10 +13,10 @@ class State(Enum):
     nonReceptive = 3
     
 class Cell:
-    def __init__(self, vapourLevel:float, u:float, v:float, state:State):
-        self.vapourLevel = vapourLevel
+    def __init__(self,u:float, v:float, state:State):
         self.u = u
         self.v = v
+        self.vapourLevel = self.u + self.v
         self.state = state
     
     def crystallise(self):
@@ -26,7 +26,7 @@ class Cell:
         
 class Grid:
     def __init__(self):
-        self.points:dict[tuple, Cell] = {(0,0): Cell(1, 0, 1, State.frozen)}
+        self.points:dict[tuple, Cell] = {(0,0): Cell(0, 1, State.frozen)}
         for i in range(40):
             self.expand()
         
@@ -69,12 +69,12 @@ class Grid:
         
         for point in newPoints:
             if point not in self.points.keys():
-                self.points[point] = Cell(beta, beta, 0, State.nonReceptive) 
+                self.points[point] = Cell(beta, 0, State.nonReceptive) 
                 
     def constant_addition(self):
         for coordinates, cell in self.points.items():
             if cell.state != State.nonReceptive:
-                self.points[coordinates] = Cell(1,cell.u, cell.v+gamma, cell.state)
+                self.points[coordinates] = Cell(cell.u, cell.v+gamma, cell.state)
             
                 
     def diffuse(self):
@@ -96,14 +96,16 @@ class Grid:
                         totalUnfrozenNeighbours +=1
                     totalU += neighbourCell.u
                     
-                averageU = totalU/totalUnfrozenNeighbours
+                averageU = totalU/max(totalUnfrozenNeighbours, 1)
                 
                 u = cell.u + (alpha/2)*(averageU -cell.u)
                 
-                if u + cell.v>=1:
-                    newPoints[coordinates] = Cell(u+cell.v, 0, u+cell.v, State.frozen)
+                if cell.vapourLevel >1:
+                    newPoints[coordinates] = Cell(0, u + cell.v, State.frozen)
+                elif cell.state == State.boundary:
+                    newPoints[coordinates] = Cell(0, u + cell.v, State.nonReceptive)
                 else:
-                    newPoints[coordinates] = Cell(u+cell.v, u+cell.v, 0, State.nonReceptive)
+                    newPoints[coordinates] = Cell(u, cell.v, State.nonReceptive)
                         
                 for coordinates, cell in newPoints.items():
                     self.points[coordinates] = cell
@@ -131,15 +133,16 @@ def find_neighbours(coordinates: tuple):
     neighbours.append((x+2, y+1))
     neighbours.append((x+2, y-1))
     neighbours.append((x-2, y+1))
-    neighbours.append((x-2, y-1))
+    neighbours.append((x-2, y-1))  
     
     return neighbours
     
 grid = Grid()
 
-for i in range(50):
-    grid.diffuse() 
-    grid.constant_addition()
+for i in range(200):
+    
     grid.set_boundary_points()
+    grid.constant_addition()
+    grid.diffuse() 
 
 grid.visualise()
